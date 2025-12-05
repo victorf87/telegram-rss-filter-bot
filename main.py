@@ -49,5 +49,4 @@ def main():
                 post_to_telegram(message)
 
 if __name__ == "__main__":
-    post_to_telegram("🎯 Тестовое сообщение: бот работает!")
     main()
