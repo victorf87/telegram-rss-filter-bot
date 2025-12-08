@@ -63,7 +63,8 @@ def main() -> None:
                 continue
             title_lower = title.lower()
             if any(keyword in title_lower for keyword in KEYWORDS):
-                message = f'<b>{title}</b>\\n{link}'
+                # формируем активную ссылку
+                message = f'<a href="{link}"><b>{title}</b></a>'
                 print(f'[INFO] Отправка: {title}')
                 post_to_telegram(message)
             else:
