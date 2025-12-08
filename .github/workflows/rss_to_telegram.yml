@@ -1,8 +1,8 @@
-action_name: RSS to Telegram
+name: RSS to Telegram
 
 on:
   schedule:
-    - cron: "0 * * * *"  # Каждый час
+    - cron: "0 * * * *" # Каждый час запускает workflow
   workflow_dispatch:
 
 jobs:
@@ -10,15 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
       - name: Install dependencies
         run: pip install feedparser requests
-
       - name: Run bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
