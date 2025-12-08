@@ -1,52 +1,72 @@
-import feedparser
 import os
 import requests
-from datetime import datetime, timedelta
+import feedparser
+from datetime import datetime, timedelta, timezone
+import time
 
-# Загрузка переменных
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# Загрузка переменных окружения
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+CHAT_ID = os.getenv('CHAT_ID')
+
+# Проверка обязательных переменных
+if not BOT_TOKEN or not CHAT_ID:
+    raise EnvironmentError('BOT_TOKEN и/или CHAT_ID не заданы')
 
 # Загрузка ключевых слов
-with open("keywords.txt", "r", encoding="utf-8") as f:
-    keywords = [line.strip().lower() for line in f if line.strip()]
+with open('keywords.txt', 'r', encoding='utf‑8') as f:
+    KEYWORDS = [line.strip().lower() for line in f if line.strip()]
 
-# Загрузка RSS-лент
-with open("feeds.txt", "r", encoding="utf-8") as f:
-    feed_urls = [line.strip() for line in f if line.strip()]
+# Загрузка RSS‑лент
+with open('feeds.txt', 'r', encoding='utf‑8') as f:
+    FEED_URLS = [line.strip() for line in f if line.strip()]
 
-def post_to_telegram(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+# Отправка сообщения в телеграм
+def post_to_telegram(text: str) -> None:
+    url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
     data = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+        'chat_id': CHAT_ID,
+        'text': text,
+        'parse_mode': 'HTML',
+        'disable_web_page_preview': False,
     }
-    requests.post(url, data=data)
+    resp = requests.post(url, data=data, timeout=10)
+    if resp.status_code != 200:
+        print(f'[ERROR] Telegram API returned {resp.status_code}: {resp.text}')
 
-def is_recent(published):
+# Проверка, опубликована ли статья в нужном интервале
+TIME_WINDOW = timedelta(hours=12)
+
+def is_recent(published_parsed) -> bool:
     try:
-        published_time = datetime(*feedparser._parse_date(published)[:6])
-        return datetime.utcnow() - published_time < timedelta(hours=1)
-    except:
+        if not published_parsed:
+            return False
+        published_time = datetime.fromtimestamp(
+            time.mktime(published_parsed), tz=timezone.utc
+        )
+        return datetime.now(timezone.utc) - published_time < TIME_WINDOW
+    except Exception:
         return False
 
+# Основная логика
 def main():
-    for url in feed_urls:
+    for url in FEED_URLS:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            title = entry.title
-            link = entry.link
-            published = entry.get("published", "")
+            title = entry.get('title', '')
+            link = entry.get('link', '')
+            published_parsed = entry.get('published_parsed') or entry.get('updated_parsed')
 
-            if not is_recent(published):
+            # Проверяем, что новость свежая
+            if not is_recent(published_parsed):
                 continue
 
             title_lower = title.lower()
-            if any(keyword in title_lower for keyword in keywords):
-                message = f"<b>{title}</b>\n{link}"
+            if any(keyword in title_lower for keyword in KEYWORDS):
+                message = f'<b>{title}</b>\n{link}'
+                print(f'[INFO] Отправка: {title}')
                 post_to_telegram(message)
+            else:
+                print(f'[DEBUG] Пропуск: {title}')
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
