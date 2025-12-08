@@ -1,4 +1,4 @@
-name: RSS to Telegram
+action_name: RSS to Telegram
 
 on:
   schedule:
