@@ -4,24 +4,35 @@ import feedparser
 from datetime import datetime, timedelta, timezone
 import time
 
-# Загрузка переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
 
-# Проверка обязательных переменных
 if not BOT_TOKEN or not CHAT_ID:
     raise EnvironmentError('BOT_TOKEN и/или CHAT_ID не заданы')
 
-# Загрузка ключевых слов
+# Ключевые слова и ленты не меняются
 with open('keywords.txt', 'r', encoding='utf-8') as f:
     KEYWORDS = [line.strip().lower() for line in f if line.strip()]
 
-# Загрузка RSS‑лент
 with open('feeds.txt', 'r', encoding='utf-8') as f:
     FEED_URLS = [line.strip() for line in f if line.strip()]
 
+# Файл, где будем хранить уже отправленные ссылки
+SENT_FILE = 'sent_articles.txt'
+
+def load_sent_links() -> set[str]:
+    """Загружает множество уже отправленных ссылок из файла."""
+    if not os.path.exists(SENT_FILE):
+        return set()
+    with open(SENT_FILE, 'r', encoding='utf-8') as f:
+        return {line.strip() for line in f if line.strip()}
+
+def save_sent_link(link: str) -> None:
+    """Добавляет новую ссылку в файл отправленных."""
+    with open(SENT_FILE, 'a', encoding='utf-8') as f:
+        f.write(link + '\n')
+
 def post_to_telegram(text: str) -> None:
-    """Отправляет текстовое сообщение в телеграм‑канал."""
     url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
     data = {
         'chat_id': CHAT_ID,
@@ -33,42 +44,44 @@ def post_to_telegram(text: str) -> None:
     if resp.status_code != 200:
         print(f'[ERROR] Telegram API returned {resp.status_code}: {resp.text}')
 
-# Интервал, в пределах которого новости считаются свежими
 TIME_WINDOW = timedelta(hours=12)
 
 def is_recent(published_parsed) -> bool:
-    """Проверяет, что новость была опубликована в течение последнего TIME_WINDOW."""
+    if not published_parsed:
+        return False
     try:
-        if not published_parsed:
-            return False
-        # Преобразуем struct_time в datetime c учётом UTC
         published_time = datetime.fromtimestamp(
             time.mktime(published_parsed), tz=timezone.utc
         )
-        return datetime.now(timezone.utc) - published_time < TIME_WINDOW
     except Exception:
         return False
+    return datetime.now(timezone.utc) - published_time < TIME_WINDOW
 
-def main() -> None:
-    """Основная логика: парсинг лент, фильтрация по ключевым словам и отправка."""
+def main():
+    sent_links = load_sent_links()
     for url in FEED_URLS:
         feed = feedparser.parse(url)
         for entry in feed.entries:
             title = entry.get('title', '')
             link = entry.get('link', '')
-            # В некоторых лентах может отсутствовать published_parsed; используем updated_parsed
             published_parsed = entry.get('published_parsed') or entry.get('updated_parsed')
-            # Проверяем свежесть
             if not is_recent(published_parsed):
                 continue
             title_lower = title.lower()
             if any(keyword in title_lower for keyword in KEYWORDS):
-                # формируем активную ссылку
+                # Проверяем, отправляли ли мы эту ссылку ранее
+                if link in sent_links:
+                    print(f'[DEBUG] Уже отправлено: {title}')
+                    continue
+                # Формируем активную ссылку
                 message = f'<a href="{link}"><b>{title}</b></a>'
                 print(f'[INFO] Отправка: {title}')
                 post_to_telegram(message)
+                # Добавляем ссылку в список отправленных
+                save_sent_link(link)
+                sent_links.add(link)
             else:
-                print(f'[DEBUG] Пропуск: {title}')
+                print(f'[DEBUG] Пропуск (не содержит ключевое слово): {title}')
 
 if __name__ == '__main__':
     main()
