@@ -2,7 +2,7 @@ name: RSS to Telegram
 
 on:
   schedule:
-    - cron: "0 * * * *" # Каждый час запускает workflow
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -10,14 +10,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      # Восстанавливаем файл отправленных статей, если он существует в кеше
+      - name: Restore sent articles cache
+        uses: actions/cache@v3
+        with:
+          path: sent_articles.txt
+          key: sent-articles-cache
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+
       - name: Install dependencies
         run: pip install feedparser requests
+
       - name: Run bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python main.py
+
+      # Сохраняем обновлённый sent_articles.txt в кеш для следующего запуска
+      - name: Save sent articles cache
+        uses: actions/cache@v3
+        with:
+          path: sent_articles.txt
+          key: sent-articles-cache-${{ github.run_id }}
+          restore-keys: sent-articles-cache
