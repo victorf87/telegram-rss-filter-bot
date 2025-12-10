@@ -11,12 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # Восстанавливаем файл отправленных статей, если он существует в кеше
+      # Восстанавливаем файл из кеша (ищем любой кеш с префиксом sent-articles-cache)
       - name: Restore sent articles cache
         uses: actions/cache@v3
         with:
           path: sent_articles.txt
           key: sent-articles-cache
+          restore-keys: sent-articles-cache
+
+      # Создаём файл, если он не существует (на случай первого запуска)
+      - name: Ensure state file exists
+        run: |
+          if [ ! -f sent_articles.txt ]; then
+            touch sent_articles.txt
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -32,7 +40,7 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python main.py
 
-      # Сохраняем обновлённый sent_articles.txt в кеш для следующего запуска
+      # Сохраняем обновлённый sent_articles.txt в новый кеш
       - name: Save sent articles cache
         uses: actions/cache@v3
         with:
