@@ -1,49 +1,60 @@
-name: RSS to Telegram
+name: Telegram RSS Filter Bot
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    # запуcк каждые 30 минут (поменяй, если нужно)
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+
+# чтобы не было двух одновременных запусков, которые шлют одно и то же
+concurrency:
+  group: telegram-rss-bot
+  cancel-in-progress: true
+
+# нужно для того, чтобы workflow мог коммитить изменения в репозиторий
+permissions:
+  contents: write
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-
-      # Восстанавливаем файл из кеша (ищем любой кеш с префиксом sent-articles-cache)
-      - name: Restore sent articles cache
-        uses: actions/cache@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          path: sent_articles.txt
-          key: sent-articles-cache
-          restore-keys: sent-articles-cache
-
-      # Создаём файл, если он не существует (на случай первого запуска)
-      - name: Ensure state file exists
-        run: |
-          if [ ! -f sent_articles.txt ]; then
-            touch sent_articles.txt
-          fi
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install feedparser requests
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install feedparser requests
+          fi
 
       - name: Run bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python main.py
+        run: |
+          python main.py
 
-      # Сохраняем обновлённый sent_articles.txt в новый кеш
-      - name: Save sent articles cache
-        uses: actions/cache@v3
-        with:
-          path: sent_articles.txt
-          key: sent-articles-cache-${{ github.run_id }}
-          restore-keys: sent-articles-cache
+      - name: Commit sent_articles.txt state
+        run: |
+          if git status --porcelain | grep -q "sent_articles.txt"; then
+            echo "Changes in sent_articles.txt detected, committing..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add sent_articles.txt
+            git commit -m "Update sent_articles state [skip ci]"
+            git push
+          else
+            echo "No changes in sent_articles.txt, nothing to commit."
+          fi
