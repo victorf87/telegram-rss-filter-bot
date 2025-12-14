@@ -19,17 +19,20 @@ with open('feeds.txt', 'r', encoding='utf-8') as f:
     FEED_URLS = [line.strip() for line in f if line.strip()]
 
 # Файл для сохранения отправленных идентификаторов
-SENT_FILE = 'sent_articles.txt'
+SENT_FILE = "sent_articles.txt"
 
-def load_sent_ids() -> set[str]:
+
+def load_sent_ids():
     if not os.path.exists(SENT_FILE):
         return set()
-    with open(SENT_FILE, 'r', encoding='utf-8') as f:
-        return {line.strip() for line in f if line.strip()}
 
-def save_sent_id(sent_id: str) -> None:
-    with open(SENT_FILE, 'a', encoding='utf-8') as f:
-        f.write(sent_id + '\n')
+    with open(SENT_FILE, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f if line.strip())
+
+
+def save_sent_id(entry_id):
+    with open(SENT_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{entry_id}\n")
 
 def canonical_link(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
@@ -53,7 +56,7 @@ def post_to_telegram(text: str) -> None:
     data = {
         'chat_id': CHAT_ID,
         'text': text,
-        'parse_mode': 'HTML',
+        'parse_mode':"HTML",
         'disable_web_page_preview': False,
     }
     resp = requests.post(url, data=data, timeout=10)
